@@ -1,0 +1,155 @@
+[1mdiff --git a/.vscode/settings.json b/.vscode/settings.json[m
+[1mnew file mode 100644[m
+[1mindex 0000000..a179123[m
+[1m--- /dev/null[m
+[1m+++ b/.vscode/settings.json[m
+[36m@@ -0,0 +1,18 @@[m
+[32m+[m[32m{[m
+[32m+[m[32m    "python.pythonPath": "d:\\Learning\\Skyscanner\\skyscanner\\Scripts\\python.exe",[m
+[32m+[m[32m    "sqltools.connections": [[m
+[32m+[m[32m        {[m
+[32m+[m[32m            "mysqlOptions": {[m
+[32m+[m[32m                "authProtocol": "default"[m
+[32m+[m[32m            },[m
+[32m+[m[32m            "previewLimit": 50,[m
+[32m+[m[32m            "server": "localhost",[m
+[32m+[m[32m            "port": 3306,[m
+[32m+[m[32m            "askForPassword": true,[m
+[32m+[m[32m            "driver": "MariaDB",[m
+[32m+[m[32m            "name": "FlyVegas",[m
+[32m+[m[32m            "database": "flyvegas",[m
+[32m+[m[32m            "username": "NSilva"[m
+[32m+[m[32m        }[m
+[32m+[m[32m    ][m
+[32m+[m[32m}[m
+\ No newline at end of file[m
+[1mdiff --git a/program_scripts/modules/__init__.py b/program_scripts/modules/__init__.py[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e69de29[m
+[1mdiff --git a/program_scripts/modules/__pycache__/__init__.cpython-38.pyc b/program_scripts/modules/__pycache__/__init__.cpython-38.pyc[m
+[1mnew file mode 100644[m
+[1mindex 0000000..45f6695[m
+Binary files /dev/null and b/program_scripts/modules/__pycache__/__init__.cpython-38.pyc differ
+[1mdiff --git a/program_scripts/modules/__pycache__/scanner.cpython-38.pyc b/program_scripts/modules/__pycache__/scanner.cpython-38.pyc[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e8f7931[m
+Binary files /dev/null and b/program_scripts/modules/__pycache__/scanner.cpython-38.pyc differ
+[1mdiff --git a/program_scripts/modules/get_aircraft_info.py b/program_scripts/modules/get_aircraft_info.py[m
+[1mnew file mode 100644[m
+[1mindex 0000000..1ade424[m
+[1m--- /dev/null[m
+[1m+++ b/program_scripts/modules/get_aircraft_info.py[m
+[36m@@ -0,0 +1,136 @@[m
+[32m+[m[32m# Purpose: Make calls to the AeroDataBox API to populate the airport_info table[m
+[32m+[m
+[32m+[m[32mdef aircraft_info(db_user, db_database, db_host, db_password, api_host, api_key):[m
+[32m+[m[32m    import json[m
+[32m+[m[32m    import pandas as pd[m
+[32m+[m[32m    import datetime[m
+[32m+[m[32m    import mysql.connector[m
+[32m+[m[32m    import numpy as np[m
+[32m+[m[32m    import requests[m
+[32m+[m[32m    import re[m
+[32m+[m
+[32m+[m[32m    # connect to cloud database using proper credentials[m
+[32m+[m[32m    connection = mysql.connector.connect(user = db_user, database = db_database, host = db_host, password = db_password)[m
+[32m+[m[32m    mycursor = connection.cursor()[m
+[32m+[m
+[32m+[m[32m    # Setup Aerodata box credentials. API link: https://rapidapi.com/aerodatabox/api/aerodatabox/[m
+[32m+[m[32m    url = "https://aerodatabox.p.rapidapi.com/aircrafts/icao24/"[m
+[32m+[m[32m    headers = {[m
+[32m+[m[32m        'x-rapidapi-host': api_host,[m
+[32m+[m[32m        'x-rapidapi-key': api_key[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    # make a sql call to get hex codes from the aircraft_info and aicraft_info_nc tables[m
+[32m+[m
+[32m+[m[32m    sql_select1  = """SELECT hex FROM aircraft_info WHERE api_scan = 0"""[m
+[32m+[m[41m    [m
+[32m+[m[32m    mycursor.execute(sql_select1)[m
+[32m+[m[32m    query_result = mycursor.fetchall()[m
+[32m+[m
+[32m+[m[32m    # get results from aircraft_info_nc table[m
+[32m+[m[32m    sql_select2  = """SELECT hex FROM aircraft_info_nc WHERE api_scan = 0"""[m
+[32m+[m
+[32m+[m[32m    mycursor.execute(sql_select2)[m
+[32m+[m[32m    query_result2 = mycursor.fetchall()[m
+[32m+[m
+[32m+[m[32m    # create an empty update list to do an execute many statement[m
+[32m+[m[32m    update = [][m
+[32m+[m[32m    update2 = [] # for nc table[m
+[32m+[m
+[32m+[m[32m    # loop through query result[m
+[32m+[m[32m    for x in query_result:[m
+[32m+[m[41m        [m
+[32m+[m[32m        try:[m
+[32m+[m[32m            # create search_url for api call[m
+[32m+[m[32m            search_url = url + x[0][m
+[32m+[m[32m            response = requests.request("GET", url, headers=headers)[m
+[32m+[m[32m            result = response.json()[m
+[32m+[m
+[32m+[m[32m            # grab data[m
+[32m+[m[32m            reg = result['reg'][m
+[32m+[m[32m            active = (1 if result['active'] == 'true' else 0)[m
+[32m+[m[32m            serial = result['serial'][m
+[32m+[m[32m            airline = result['airlineName'][m
+[32m+[m[32m            iata_short = result['iataCodeShort'][m
+[32m+[m[32m            iata_long = result['iataCodeLong'][m
+[32m+[m[32m            model = result['model'][m
+[32m+[m[32m            model_code = result['modelCode'][m
+[32m+[m[32m            first_flight_date = result['firstFlightDate'][m
+[32m+[m[32m            delivery_date = result['deliveryDate'][m
+[32m+[m[32m            registration_date = result['registrationDate'][m
+[32m+[m[32m            type_name = result['typeName'][m
+[32m+[m[32m            num_engines = result['numEngines'][m
+[32m+[m[32m            engine_type = result['engineType'][m
+[32m+[m[32m            is_freighter = (1 if result['isFreighter'] == 'true' else 0)[m
+[32m+[m
+[32m+[m[32m            # update api_scan column[m
+[32m+[m[32m            api_scan = 1[m
+[32m+[m
+[32m+[m[32m            update.extend([[reg, active, serial, airline, iata_short, iata_long, model, model_code, first_flight_date,[m
+[32m+[m[32m                            delivery_date, registration_date, type_name, num_engines, engine_type, is_freighter, api_scan, x[0]]])[m
+[32m+[m
+[32m+[m[32m        except: pass[m
+[32m+[m
+[32m+[m[32m        # loop through query result[m
+[32m+[m[32m    for x in query_result2:[m
+[32m+[m[41m        [m
+[32m+[m[32m        try:[m
+[32m+[m[32m            # create search_url for api call[m
+[32m+[m[32m            search_url = url + x[0][m
+[32m+[m[32m            response = requests.request("GET", url, headers=headers)[m
+[32m+[m[32m            result = response.json()[m
+[32m+[m
+[32m+[m[32m            # grab data[m
+[32m+[m[32m            reg = result['reg'][m
+[32m+[m[32m            active = (1 if result['active'] == 'true' else 0)[m
+[32m+[m[32m            serial = result['serial'][m
+[32m+[m[32m            airline = result['airlineName'][m
+[32m+[m[32m            iata_short = result['iataCodeShort'][m
+[32m+[m[32m            iata_long = result['iataCodeLong'][m
+[32m+[m[32m            model = result['model'][m
+[32m+[m[32m            model_code = result['modelCode'][m
+[32m+[m[32m            first_flight_date = result['firstFlightDate'][m
+[32m+[m[32m            delivery_date = result['deliveryDate'][m
+[32m+[m[32m            registration_date = result['registrationDate'][m
+[32m+[m[32m            type_name = result['typeName'][m
+[32m+[m[32m            num_engines = result['numEngines'][m
+[32m+[m[32m            engine_type = result['engineType'][m
+[32m+[m[32m            is_freighter = (1 if result['isFreighter'] == 'true' else 0)[m
+[32m+[m
+[32m+[m[32m            # update api_scan column[m
+[32m+[m[32m            api_scan = 1[m
+[32m+[m
+[32m+[m[32m            update2.extend([[reg, active, serial, airline, iata_short, iata_long, model, model_code, first_flight_date,[m
+[32m+[m[32m                            delivery_date, registration_date, type_name, num_engines, engine_type, is_freighter, api_scan, x[0]]])[m
+[32m+[m
+[32m+[m[32m        except: pass[m
+[32m+[m
+[32m+[m[32m    # create sql update scripts for both aircraft_info and aircraft_info_nc tables[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        sql_update1 = """UPDATE aircraft_info[m[41m [m
+[32m+[m[32m                        SET reg = %s, active = %s, serial = %s, airline_name = %s, iata_short = %s, iata_long = %s, model = %s,[m
+[32m+[m[32m                            model_co
