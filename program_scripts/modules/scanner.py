@@ -10,17 +10,18 @@ def scanner(db_user, db_database, db_host, db_password):
     import datetime
     import numpy as np
     import mysql.connector
+    from mysql.connector.constants import ClientFlag
     import urllib.request, json 
 
     # Open json file that has flights saved TODO delete this when hooked up to pi
-    f = open('D:\Learning\Skyscanner\\test_data\sky_test6.json')
+    #f = open('D:\Learning\Skyscanner\\test_data\sky_test6.json')
 
     #return json data as a dictionary
-    data = json.load(f)
+    #data = json.load(f)
 
     # Read in piaware 1090 dump feed (json file) and decode the json file
-    # with urllib.request.urlopen("http://192.168.7.90/dump1090-fa/data/aircraft.json") as url:
-    #     data = json.loads(url.read().decode())
+    with urllib.request.urlopen("http://192.168.0.79/dump1090-fa/data/aircraft.json") as url:
+        data = json.loads(url.read().decode())
 
 
     # Create a new dataframe for the json date - easier to import data from a dataframe into database rather than from json files
@@ -85,8 +86,12 @@ def scanner(db_user, db_database, db_host, db_password):
                         float(row['track']), int(row['version']), flight_timestamp_utc))
 
 
-    # connect to cloud database using proper credentials
-    connection = mysql.connector.connect(user = db_user, database = db_database, host = db_host, password = db_password)
+    # connect to cloud database using proper credentials including SSL
+    #connection = mysql.connector.connect(user = db_user, database = db_database, host = db_host, password = db_password)
+    connection = mysql.connector.connect(user = db_user, database = db_database, host = db_host, password = db_password, 
+                                        client_flags = [ClientFlag.SSL], ssl_ca = 'D:\Learning\Skyscanner\program_scripts\modules\Connection\ca.pem',
+                                        ssl_cert = 'D:\Learning\Skyscanner\program_scripts\modules\Connection\client-cert.pem', 
+                                        ssl_key = 'D:\Learning\Skyscanner\program_scripts\modules\Connection\client-key.pem' )
     mycursor = connection.cursor()
 
     # Insert hex code into aircraft info table first
